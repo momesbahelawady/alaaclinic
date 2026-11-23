@@ -202,6 +202,7 @@
   .loading{text-align:center; color:var(--muted); padding:16px; font-size:.95rem;}
   .hint{font-size:.82rem; color:var(--muted); margin-top:12px; text-align:center; line-height:1.7;}
   footer{text-align:center; color:var(--muted); font-size:.82rem; padding:24px 16px; line-height:1.9;}
+  .doctor-link{display:inline-block; margin-top:8px; color:var(--teal-dark); text-decoration:none; font-weight:700; border-bottom:1px solid var(--teal-light);}
 
   .online-intro{background:var(--teal-soft); border:1px solid var(--teal-light); border-radius:var(--radius-sm); padding:14px; color:var(--teal-deep); line-height:1.8; margin-bottom:18px;}
   @media (max-width:600px){
@@ -253,7 +254,6 @@
   <div class="tabs">
     <button id="tabPatient" class="active" onclick="showView('patient')">حجز موعد</button>
     <button id="tabOnline" onclick="showView('online')">كشف أونلاين</button>
-    <button id="tabClinic" onclick="showView('clinic')">مواعيد العيادة</button>
   </div>
 
   <!-- ============ Patient view ============ -->
@@ -312,58 +312,7 @@
     </div>
   </div>
 
-  <!-- ============ Clinic view ============ -->
-  <div id="viewClinic" class="card" style="display:none">
 
-    <!-- Staff login -->
-    <div id="clinicLogin" style="display:none">
-      <h2><span class="num">&#x1F512;</span> دخول العيادة</h2>
-      <p class="hint" style="text-align:right; margin:0 0 6px">الصفحة دي خاصة بالعيادة بس. سجّل دخولك بحساب العيادة.</p>
-      <label for="staffEmail">البريد الإلكتروني</label>
-      <input id="staffEmail" type="email" dir="ltr" placeholder="clinic@example.com" autocomplete="username">
-      <label for="staffPass">كلمة السر</label>
-      <input id="staffPass" type="password" dir="ltr" autocomplete="current-password">
-      <button class="btn" id="loginBtn" onclick="staffLogin()">دخول</button>
-      <div class="notice" id="loginErr"></div>
-    </div>
-
-    <!-- Bookings list -->
-    <div id="clinicData" style="display:none">
-      <section class="doc-panel">
-        <h2>إدارة دور النهارده</h2>
-        <div id="docStatus">جاري تحميل الدور…</div>
-        <div class="doc-actions">
-          <button class="btn" id="doneBtn" onclick="changeQueue(false)">خلصت</button>
-          <button class="btn secondary" id="undoBtn" onclick="changeQueue(true)">تراجع</button>
-        </div>
-        <div id="docError" role="status"></div>
-        <p class="hint">الحالات بترتيب المواعيد. زرار خلصت بيخلّص أقرب ميعاد لسه مخلصش، مش بيلغي الحجز. لو حالة مجتش، الغي حجزها من الجدول. تراجع بيرجع آخر حالة خلصت.</p>
-      </section>
-      <div class="clinic-head">
-        <h2>حجوزات النهارده والجاية</h2>
-        <button class="btn secondary" id="logoutBtn" style="display:none" onclick="staffLogout()">تسجيل خروج</button>
-      </div>
-      <div id="bookingsTableWrap">
-        <table>
-          <thead>
-            <tr><th>اليوم</th><th>التاريخ</th><th>الساعة</th><th>الاسم</th><th>الموبايل</th><th>ملاحظة</th><th></th></tr>
-          </thead>
-          <tbody id="bookingsBody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="noBookings" style="display:none">مفيش حجوزات قادمة لسه.</div>
-      <div class="clinic-head" style="margin-top:26px"><h2>حجوزات الكشف أونلاين</h2></div>
-      <div id="onlineTableWrap">
-        <table>
-          <thead><tr><th>اليوم</th><th>التاريخ</th><th>الساعة</th><th>الاسم</th><th>الموبايل</th><th>الحالة</th><th>الإيصال</th><th>الدفع</th><th></th></tr></thead>
-          <tbody id="onlineBody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="noOnlineBookings" style="display:none">مفيش كشوف أونلاين لسه.</div>
-      <div class="hint">لو سجّلت دخولك ومش شايف حجوزات مع إنك متأكد إن في حجوزات، يبقى حسابك لسه مش مضاف لقائمة العيادة في الداتابيز (خطوة "حساب دخول للعيادة" في دليل التشغيل).</div>
-    </div>
-
-  </div>
 
   <footer id="footerInfo"></footer>
 </div>
@@ -518,78 +467,6 @@ async function refreshAvailability(){
       .filter(b => b.date >= today)
       .map(b => ({ date: b.date, time: b.time }));
   }
-}
-
-async function getSession(){
-  if (!db) return null;
-  const { data } = await db.auth.getSession();
-  return data && data.session ? data.session : null;
-}
-
-async function staffLogin(){
-  const email = document.getElementById("staffEmail").value.trim();
-  const pass = document.getElementById("staffPass").value;
-  const errBox = document.getElementById("loginErr");
-  errBox.className = "notice"; errBox.innerHTML = "";
-  if (!email || !pass) { errBox.className = "notice err"; errBox.textContent = "اكتب البريد وكلمة السر."; return; }
-  const btn = document.getElementById("loginBtn");
-  btn.disabled = true;
-  const { error } = await db.auth.signInWithPassword({ email: email, password: pass });
-  btn.disabled = false;
-  if (error) {
-    errBox.className = "notice err";
-    errBox.textContent = "بيانات الدخول مش صح. اتأكد من البريد وكلمة السر.";
-    return;
-  }
-  await openClinicData();
-}
-
-let clinicFetchToken = 0;
-
-async function staffLogout(){
-  clinicFetchToken++;
-  bookingsCache = [];
-  onlineBookingsCache = [];
-  renderOnlineClinic();
-  document.getElementById("docStatus").textContent = "";
-  document.getElementById("docError").textContent = "";
-  renderClinic();
-  await db.auth.signOut();
-  document.getElementById("clinicData").style.display = "none";
-  document.getElementById("clinicLogin").style.display = "block";
-}
-
-async function openClinicData(){
-  const token = ++clinicFetchToken;
-  document.getElementById("clinicLogin").style.display = "none";
-  document.getElementById("clinicData").style.display = "block";
-  document.getElementById("logoutBtn").style.display = db ? "inline-block" : "none";
-  const today = dateKey(new Date());
-  if (db) {
-    const { data, error } = await db
-      .from("bookings")
-      .select("*")
-      .gte("date", today)
-      .order("date", { ascending: true })
-      .order("time", { ascending: true });
-    if (token !== clinicFetchToken) return;  // اتعمل تسجيل خروج أثناء التحميل، منعملش رندر
-    bookingsCache = error ? [] : (data || []);
-    const onlineResult = await db
-      .from("online_consultations")
-      .select("*")
-      .gte("date", today)
-      .order("date", { ascending: true })
-      .order("time", { ascending: true });
-    if (token !== clinicFetchToken) return;
-    onlineBookingsCache = onlineResult.error ? [] : (onlineResult.data || []);
-  } else {
-    bookingsCache = localLoad().filter(b => b.date >= today);
-    onlineBookingsCache = localOnlineLoad().filter(b => b.date >= today);
-  }
-  if (token !== clinicFetchToken) return;
-  renderClinic();
-  renderOnlineClinic();
-  await loadDoctorQueue(token);
 }
 
 function slotsForDay(dow){
@@ -816,122 +693,15 @@ async function confirmOnlinePayment(b, btn){
   await openClinicData();
 }
 
-async function loadOnlineReceipt(b, img, token){
-  if (b.receipt_data) { img.src = b.receipt_data; return; }
-  if (!b.receipt_path || !db) return;
-  const { data, error } = await db.storage.from(RECEIPT_BUCKET).createSignedUrl(b.receipt_path, 300);
-  if (token !== clinicFetchToken) return;
-  if (error || !data || !data.signedUrl) { img.alt = "تعذر تحميل الإيصال"; return; }
-  img.src = data.signedUrl;
-}
-
-function renderOnlineClinic(){
-  const body = document.getElementById("onlineBody");
-  const noB = document.getElementById("noOnlineBookings");
-  body.innerHTML = "";
-  const todayKey = dateKey(new Date());
-  const upcoming = onlineBookingsCache
-    .filter(b => b.date >= todayKey)
-    .sort((a,b) => (a.date + a.time).localeCompare(b.date + b.time));
-  noB.style.display = upcoming.length ? "none" : "block";
-  document.getElementById("onlineTableWrap").style.display = upcoming.length ? "block" : "none";
-  upcoming.forEach(b => {
-    const d = new Date(b.date + "T12:00:00");
-    const tr = document.createElement("tr");
-    const isToday = b.date === todayKey;
-    tr.innerHTML =
-      "<td>" + DOW[d.getDay()] + (isToday ? ' <span class="badge soon">النهارده</span>' : "") + "</td>" +
-      "<td>" + d.getDate() + " " + MONTHS[d.getMonth()] + "</td>" +
-      "<td>" + to12h(b.time) + "</td>" +
-      "<td></td>" +
-      "<td dir=\"ltr\"></td>" +
-      "<td></td>" +
-      "<td></td>" +
-      "<td></td>" +
-      "<td></td>";
-    ["اليوم","التاريخ","الساعة","الاسم","الموبايل","الحالة","الإيصال","الدفع",""].forEach((label,i)=>tr.children[i].dataset.label=label);
-    tr.children[3].textContent = b.name;
-    tr.children[4].textContent = b.phone;
-    tr.children[5].textContent = b.complaint || "—";
-
-    const receiptCell = tr.children[6];
-    if (b.receipt_path || b.receipt_data) {
-      const img = document.createElement("img");
-      img.className = "receipt-thumb";
-      img.alt = "صورة إيصال التحويل";
-      img.loading = "lazy";
-      img.onclick = () => { if (img.src) window.open(img.src, "_blank", "noopener"); };
-      receiptCell.appendChild(img);
-      loadOnlineReceipt(b, img, clinicFetchToken);
-    } else {
-      receiptCell.textContent = "—";
-    }
-
-    const payCell = tr.children[7];
-    const payBadge = document.createElement("span");
-    payBadge.className = "badge" + (b.payment_status === "paid" ? " soon" : "");
-    payBadge.textContent = b.payment_status === "paid" ? "الدفع اتأكد" : "بانتظار الدفع";
-    payCell.appendChild(payBadge);
-    if (b.payment_status !== "paid") {
-      const payBtn = document.createElement("button");
-      payBtn.className = "cancel";
-      payBtn.style.marginInlineStart = "8px";
-      payBtn.textContent = "تأكيد الدفع";
-      payBtn.onclick = () => confirmOnlinePayment(b, payBtn);
-      payCell.appendChild(payBtn);
-    }
-    const btn = document.createElement("button");
-    btn.className = "cancel";
-    btn.textContent = "إلغاء";
-    btn.onclick = async () => {
-      if(confirm("إلغاء الكشف أونلاين لـ " + b.name + " يوم " + DOW[d.getDay()] + " الساعة " + to12h(b.time) + "؟")){
-        if (db) {
-          await db.from("online_consultations").delete().eq("id", b.id);
-          if (b.receipt_path) await db.storage.from(RECEIPT_BUCKET).remove([b.receipt_path]);
-          await openClinicData();
-        } else {
-          localOnlineSave(localOnlineLoad().filter(x => x.id !== b.id));
-          await openClinicData();
-        }
-        await refreshOnlineAvailability();
-        renderOnlineSlots();
-      }
-    };
-    tr.children[8].appendChild(btn);
-    body.appendChild(tr);
-  });
-}
-
 async function showView(v){
   document.getElementById("viewPatient").style.display = v === "patient" ? "block" : "none";
   document.getElementById("viewOnline").style.display = v === "online" ? "block" : "none";
-  document.getElementById("viewClinic").style.display = v === "clinic" ? "block" : "none";
   document.getElementById("tabPatient").classList.toggle("active", v === "patient");
   document.getElementById("tabOnline").classList.toggle("active", v === "online");
-  document.getElementById("tabClinic").classList.toggle("active", v === "clinic");
   if (v === "online") {
     await refreshOnlineAvailability();
     renderOnlineDays();
     renderOnlineSlots();
-  }
-  if (v === "clinic") {
-    if (!db) {
-      // وضع المعاينة: مفيش داتابيز، اعرض الحجوزات المحلية على طول
-      await openClinicData();
-      return;
-    }
-    const session = await getSession();
-    if (session) {
-      await openClinicData();
-    } else {
-      clinicFetchToken++;
-      bookingsCache = [];
-      onlineBookingsCache = [];
-      renderClinic();
-      renderOnlineClinic();
-      document.getElementById("clinicData").style.display = "none";
-      document.getElementById("clinicLogin").style.display = "block";
-    }
   }
 }
 
@@ -1191,50 +961,6 @@ async function updateMyQueue(){
     document.getElementById('queueUpdated').textContent='التحديث متوقف. العدد السابق ممكن يكون قديم. اتأكد من النت وإعداد جدول الدور في Supabase.';
     if(!document.getElementById('queueValue').textContent)document.getElementById('queueValue').textContent='العدد غير متاح دلوقتي.';
   }finally{queueLoading=false;}
-}
-function localQueueStatus(){
- const d=cairoDay(),pending=localPending().filter(b=>b.date===d).sort((a,b)=>a.time.localeCompare(b.time));
- return {date:d,done:localCompleted().filter(b=>b.date===d).length,remaining:pending.length,next_time:pending[0]?.time||null};
-}
-function renderDoctorStatus(data){
- document.getElementById('docStatus').textContent='النهارده '+data.date+' · خلص '+data.done+' · باقي '+data.remaining+(data.next_time?' · الميعاد اللي عليه الدور: '+to12h(data.next_time):' · مفيش حالات متبقية');
- document.getElementById('doneBtn').disabled=!data.remaining;
- document.getElementById('undoBtn').disabled=!data.done;
-}
-async function loadDoctorQueue(token){
- const errorBox=document.getElementById('docError');
- try{
-  let data;
-  if(db){const result=await db.rpc('queue_status');if(result.error)throw result.error;data=result.data;}else data=localQueueStatus();
-  if(token!==clinicFetchToken)return;
-  errorBox.textContent='';renderDoctorStatus(data);
- }catch(e){
-  if(token!==clinicFetchToken)return;
-  document.getElementById('docStatus').textContent='العدّاد غير متاح.';
-  errorBox.textContent='اتأكد إن حسابك مضاف للعيادة وإن ملف تحديث Supabase اتشغّل.';
-  document.getElementById('doneBtn').disabled=true;document.getElementById('undoBtn').disabled=true;
- }
-}
-let doctorBusy=false;
-async function changeQueue(undo){
- if(doctorBusy)return;
- const token=clinicFetchToken;
- doctorBusy=true;
- document.getElementById('doneBtn').disabled=true;document.getElementById('undoBtn').disabled=true;
- try{
-  let data;
-  if(db){const result=await db.rpc(undo?'undo_case_done':'mark_case_done');if(result.error)throw result.error;data=result.data;}
-  else{
-   const done=localCompleted(),d=cairoDay();
-   if(undo){for(let i=done.length-1;i>=0;i--)if(done[i].date===d){done.splice(i,1);break;}}
-   else{const next=localPending().filter(b=>b.date===d).sort((a,b)=>a.time.localeCompare(b.time))[0];if(next)done.push(next);}
-   localStorage.setItem(LOCAL_DONE_KEY,JSON.stringify(done));data=localQueueStatus();
-  }
-  if(token!==clinicFetchToken)return;
-  document.getElementById('docError').textContent='';renderDoctorStatus(data);await updateMyQueue();
- }catch(e){
-  if(token===clinicFetchToken){document.getElementById('docError').textContent='التحديث ما اتأكدش. بنراجع العدد الحالي. راجعيه قبل ما تدوسي تاني.';await loadDoctorQueue(token);}
- }finally{doctorBusy=false;}
 }
 window.addEventListener('storage',()=>{updateMyQueue();});
 
